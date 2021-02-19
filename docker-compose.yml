@@ -1,0 +1,15 @@
+version: '3'
+services:
+
+  # Primary data store
+  postgres:
+    image: postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_DB=fts
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - ./docker/postgres/data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432

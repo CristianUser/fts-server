@@ -1,0 +1,12 @@
+.DS_Store
+.idea
+.vscode
+
+node_modules
+docker/**/data
+.env
+package-lock.json
+logs.log
+
+dist
+build
