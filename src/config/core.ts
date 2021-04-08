@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import fastify, { FastifyInstance } from 'fastify';
 import _get from 'lodash/get';
 import _merge from 'lodash/merge';
 import sec, { ModelCtor, Sequelize } from 'sequelize';
@@ -15,9 +15,9 @@ const configs = {};
 const bootstrap = {};
 
 type IAppService = (app: FastifyInstance, models: IModelDict, configs: any) => void;
-type IRouterFileInit = (opts: RouterInitOptions) => Function;
+type IRouterFileInit = (opts: IRouterInitOptions) => Function;
 type IRouterFileRegister = (fastify: FastifyInstance, opts: any, done: any) => void;
-interface RouterInitOptions {
+export interface IRouterInitOptions {
   model?: ModelCtor<CustomModel>;
   models?: IModelDict
 }
@@ -47,11 +47,13 @@ async function loadModels(sequelize: Sequelize) {
  */
 async function loadControllers(fastify: FastifyInstance) {
   return getFiles('src/api/**/index.ts', async file => {
+    // const prefix = '/v1'
     const prefix = generatePrefix(file);
+    // const name = 'user'
     const name = prefix.split('/').reverse()[0];
     const router = await import(file).then((mod: IRouterFile) => {
       if (mod.init) {
-        const options: RouterInitOptions = {
+        const options: IRouterInitOptions = {
           models
         };
 
@@ -66,7 +68,7 @@ async function loadControllers(fastify: FastifyInstance) {
 
     
     fastify.register(router, { prefix })
-    fastify.log.debug('Route Registered', { prefix })
+    fastify.log.info({ msg: 'Route Registered', prefix })
   });
 }
 
@@ -115,7 +117,7 @@ async function loadControllers(fastify: FastifyInstance) {
  * @param {Object} app
  * @param {Object} sequelize
  */
-export async function init(app: FastifyInstance, sequelize: Sequelize, services = []) {
+export async function init(fastify: FastifyInstance, sequelize: Sequelize, services = []) {
   /** Steps Execution in dependency order*/
   // loadConfigs();
   // loadBootstrapFiles();
@@ -123,14 +125,15 @@ export async function init(app: FastifyInstance, sequelize: Sequelize, services 
   sequelize.sync({ alter: true });
 
   /** start hooks before load controllers */
-  services.forEach((service: IAppService) => service(app, models, configs));
+  services.forEach((service: IAppService) => service(fastify, models, configs));
   /** end hooks before load controllers */
 
-  await loadControllers(app);
+  await loadControllers(fastify);
   // loadDefaultControllers(app);
 
+  
   /** Needs to be moved in the future */
-  app.get('/_bootstrap', async(request, reply) => reply.send(bootstrap));
+  fastify.get('/_bootstrap', async(request, reply) => reply.send(bootstrap));
 };
 
 /**
@@ -138,3 +141,8 @@ export async function init(app: FastifyInstance, sequelize: Sequelize, services 
  * @returns {Object}
  */
 export const getModels = () => models;
+
+export default {
+  init,
+  getModels
+}

@@ -1,19 +1,18 @@
 import fastify from 'fastify';
 import dotenv from './services/dotenv';
-import { init } from './config/core';
+import core from './config/core';
 import db from './config/db';
 
-const server = fastify({ logger: true });
+const server = fastify({ logger: { prettyPrint: true } });
 
-server.get("/ping", async (request, reply) => {
+server.get('/ping', async (request, reply) => {
   return 'pong\n';
 });
 
 async function start() {
   try {
     dotenv.init();
-    const seq = await db.init()
-    init(server, seq);
+    await core.init(server, await db.init());
     const address = await server.listen(dotenv.get('PORT'));
 
     server.log.info(`Server listening at ${address}`);

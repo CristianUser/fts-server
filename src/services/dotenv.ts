@@ -8,6 +8,9 @@ function parseValue(value: string): any {
   if (!Number.isNaN(parseFloat(value))) {
     return parseFloat(value);
   }
+  if (value.split(',').length > 1) {
+    return value.split(',');
+  }
 
   return value;
 }

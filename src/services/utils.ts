@@ -10,7 +10,7 @@ import path from 'path';
 export function generatePrefix(file: string) {
   const fileDir = 'src/api';
 
-  return file.substring(file.indexOf(fileDir) + fileDir.length).split('/').filter(part => !part.includes('.ts')).join('/');
+  return file.substring(file.indexOf(fileDir) + 3).split('/').filter(part => !part.includes('.ts')).join('/');
 }
 
 /**
