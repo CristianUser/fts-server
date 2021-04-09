@@ -1,6 +1,6 @@
 import { Sequelize } from 'sequelize';
 
-export function model (sequelize: Sequelize, { DataTypes, UUIDV4 }: any) {
+export function model(sequelize: Sequelize, { DataTypes, UUIDV4 }: any) {
   return sequelize.define('User', {
     cid: {
       type: DataTypes.BIGINT,
@@ -29,4 +29,6 @@ export function model (sequelize: Sequelize, { DataTypes, UUIDV4 }: any) {
       allowNull: false
     }
   });
-};
+}
+
+export function onLoadedAll(sequelize: Sequelize) {}

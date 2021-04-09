@@ -1,14 +1,9 @@
 import { FastifyInstance } from 'fastify';
-import { IRouterInitOptions } from '../../../config/core';
-let initOptions: IRouterInitOptions;
+import { IContextOptions } from '../../../config/core';
 
-export function init(options: IRouterInitOptions) {
-  initOptions = options;
-}
-
-export function register(fastify: FastifyInstance, opts: any, done: any) {
+export default function(fastify: FastifyInstance, opts: IContextOptions, done: any) {
   fastify.get('/', async () => {
-    const data = await initOptions.model?.findAndCountAll();
+    const data = await opts.core.model?.findAndCountAll();
 
     return data;
   });

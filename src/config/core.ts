@@ -15,15 +15,18 @@ const configs = {};
 const bootstrap = {};
 
 type IAppService = (app: FastifyInstance, models: IModelDict, configs: any) => void;
-type IRouterFileInit = (opts: IRouterInitOptions) => Function;
+type IRouterFileInit = (opts: ICoreOptions) => Function;
 type IRouterFileRegister = (fastify: FastifyInstance, opts: any, done: any) => void;
-export interface IRouterInitOptions {
+interface ICoreOptions {
   model?: ModelCtor<CustomModel>;
-  models?: IModelDict
+  models: IModelDict;
 }
-interface IRouterFile {
+interface IRouterFile extends IRouterFileRegister {
   init: IRouterFileInit;
-  register: IRouterFileRegister;
+}
+export interface IContextOptions {
+  [property: string]: any;
+  core: ICoreOptions;
 }
 /**
  * Load model.js files in directory to register in sequelize instance
@@ -32,13 +35,22 @@ interface IRouterFile {
  * @param {Object} sequelize
  */
 async function loadModels(sequelize: Sequelize) {
-  return Promise.all(getFiles('src/models/*.ts').map(async file => {
-    const model:ModelCtor<CustomModel> = await import(file).then(mod => mod.model(sequelize, sec));
-    const modelName = getEntityName(file);
-    
-    models[modelName] = model;
-    log.debug(`Model "${modelName}" registered`);
-  }));
+  const files = getFiles('src/models/*.ts');
+
+  await Promise.all(
+    files.map(async (file) => {
+      const model: ModelCtor<CustomModel> = await import(file).then((mod) =>
+        mod.model(sequelize, sec)
+      );
+      const modelName = getEntityName(file);
+
+      models[modelName] = model;
+      log.debug(`Model "${modelName}" registered`);
+    })
+  );
+  await Promise.all(
+    files.map(async file => import(file).then((mod) => mod.onLoadedAll && mod.onLoadedAll(sequelize)))
+  );
 }
 
 /**
@@ -46,29 +58,20 @@ async function loadModels(sequelize: Sequelize) {
  * @param {Object} app
  */
 async function loadControllers(fastify: FastifyInstance) {
-  return getFiles('src/api/**/index.ts', async file => {
-    // const prefix = '/v1'
+  return getFiles('src/api/**/index.ts', async (file) => {
     const prefix = generatePrefix(file);
-    // const name = 'user'
     const name = prefix.split('/').reverse()[0];
-    const router = await import(file).then((mod: IRouterFile) => {
-      if (mod.init) {
-        const options: IRouterInitOptions = {
-          models
-        };
+    const router = await import(file).then((mod: IRouterFile) => mod);
+    const options: ICoreOptions = {
+      models
+    };
 
-        if (models[name]) {
-          options.model = models[name]
-        }
+    if (models[name]) {
+      options.model = models[name];
+    }
 
-        mod.init(options);
-      }
-      return mod.register;
-    });
-
-    
-    fastify.register(router, { prefix })
-    fastify.log.info({ msg: 'Route Registered', prefix })
+    fastify.register(router, { core: options, prefix });
+    fastify.log.info({ msg: 'Route Registered', prefix });
   });
 }
 
@@ -131,10 +134,9 @@ export async function init(fastify: FastifyInstance, sequelize: Sequelize, servi
   await loadControllers(fastify);
   // loadDefaultControllers(app);
 
-  
   /** Needs to be moved in the future */
-  fastify.get('/_bootstrap', async(request, reply) => reply.send(bootstrap));
-};
+  fastify.get('/_bootstrap', async (request, reply) => reply.send(bootstrap));
+}
 
 /**
  * Returns models instances
@@ -145,4 +147,4 @@ export const getModels = () => models;
 export default {
   init,
   getModels
-}
+};
