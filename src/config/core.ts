@@ -1,8 +1,8 @@
-import fastify, { FastifyInstance } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import _get from 'lodash/get';
 import _merge from 'lodash/merge';
 import sec, { ModelCtor, Sequelize } from 'sequelize';
-// import controller from '../services/controller';
+import controller from '../services/controller';
 import { getFiles } from '../services/files';
 import createLogger from '../services/log';
 import { generatePrefix, getEntityName, parseYaml } from '../services/utils';
@@ -11,18 +11,24 @@ import { CustomModel, IModelDict } from './../services/db/index';
 const log = createLogger({ file: __filename });
 
 let models: IModelDict = {};
-const configs = {};
+const configs: any = {};
 const bootstrap = {};
 
-type IAppService = (app: FastifyInstance, models: IModelDict, configs: any) => void;
+type IAppService = (app: FastifyInstance, models: IModelDict, configs?: any) => void;
 type IRouterFileInit = (opts: ICoreOptions) => Function;
 type IRouterFileRegister = (fastify: FastifyInstance, opts: any, done: any) => void;
+type IModelFileModel = (sequelize: Sequelize,  Sequelize: any) => ModelCtor<CustomModel>;
 interface ICoreOptions {
   model?: ModelCtor<CustomModel>;
   models: IModelDict;
 }
 interface IRouterFile extends IRouterFileRegister {
   init: IRouterFileInit;
+}
+interface IModelFile {
+  model: IModelFileModel;
+  onLoadedAll?: (sequelize: Sequelize) => Promise<void>;
+  config?: any
 }
 export interface IContextOptions {
   [property: string]: any;
@@ -36,21 +42,23 @@ export interface IContextOptions {
  */
 async function loadModels(sequelize: Sequelize) {
   const files = getFiles('src/models/*.ts');
+  const callOnLoadedAll = () => Promise.all(
+    files.map(async file => import(file).then((mod: IModelFile) => mod.onLoadedAll?.(sequelize)))
+  );
 
   await Promise.all(
     files.map(async (file) => {
-      const model: ModelCtor<CustomModel> = await import(file).then((mod) =>
-        mod.model(sequelize, sec)
-      );
-      const modelName = getEntityName(file);
+      const modelName: string = getEntityName(file);
+      const model: ModelCtor<CustomModel> = await import(file).then((mod: IModelFile) => {
+        configs[modelName] = mod.config;
+        return mod.model(sequelize, sec)
+      });
 
       models[modelName] = model;
       log.debug(`Model "${modelName}" registered`);
     })
   );
-  await Promise.all(
-    files.map(async file => import(file).then((mod) => mod.onLoadedAll && mod.onLoadedAll(sequelize)))
-  );
+  await callOnLoadedAll();
 }
 
 /**
@@ -75,31 +83,18 @@ async function loadControllers(fastify: FastifyInstance) {
   });
 }
 
-// function loadDefaultControllers(app) {
-//   Object.entries(models).forEach(([modelKey, model]) => {
-//     const schema = _get(model.getTableName(), 'schema', 'public');
+function loadDefaultControllers(fastify: FastifyInstance) {
+  Object.entries(models).forEach(([modelKey, model]) => {
+    const schema = _get(model.getTableName(), 'schema', 'public');
+    const prefix = `/api/v1/${modelKey}`;
 
-//     if (schema === 'public') {
-//       const router = controller.generateDefaultRoutes(Router(), model);
+    if (schema === 'public') {
+      const plugin = controller.generateDefaultEndpoints;
 
-//       app.use(generateRouterPath(modelKey), router);
-//     }
-//   });
-// }
-
-/**
- * Load configs.yml files in directory to register in app router
- *
- * Doesn't have execution dependency
- */
-// function loadConfigs() {
-//   getFiles('app/entities/**/configs.yml', file => {
-//     const entity = getEntityName(file);
-
-//     configs[entity] = parseYaml(file);
-//     log.debug(`${entity} configs.yml file loaded`);
-//   });
-// }
+      fastify.register(plugin, { prefix, model });
+    }
+  });
+}
 
 /**
  * Load bootstrap.yml files in directory to create endpoint
@@ -120,19 +115,18 @@ async function loadControllers(fastify: FastifyInstance) {
  * @param {Object} app
  * @param {Object} sequelize
  */
-export async function init(fastify: FastifyInstance, sequelize: Sequelize, services = []) {
+export async function init(fastify: FastifyInstance, sequelize: Sequelize, services: IAppService[] = []) {
   /** Steps Execution in dependency order*/
-  // loadConfigs();
   // loadBootstrapFiles();
   await loadModels(sequelize);
   sequelize.sync({ alter: true });
 
   /** start hooks before load controllers */
-  services.forEach((service: IAppService) => service(fastify, models, configs));
+  services.forEach(service => service(fastify, models, configs));
   /** end hooks before load controllers */
 
   await loadControllers(fastify);
-  // loadDefaultControllers(app);
+  await loadDefaultControllers(fastify);
 
   /** Needs to be moved in the future */
   fastify.get('/_bootstrap', async (request, reply) => reply.send(bootstrap));

@@ -12,7 +12,7 @@ server.get('/ping', async (request, reply) => {
 async function start() {
   try {
     dotenv.init();
-    await core.init(server, await db.init());
+    await core.init(server, await db.init(), [db.service]);
     const address = await server.listen(dotenv.get('PORT'));
 
     server.log.info(`Server listening at ${address}`);

@@ -95,7 +95,7 @@ export function getModelHelper(model: string | ModelCtor<CustomModel>) {
      * @param {object} body
      * @returns {Promise<import('sequelize').Model>}
      */
-    async put(id: string, body: any, upsert = false): Promise<CustomModel> {
+    async put(id: string, body: any, upsert: boolean = false): Promise<CustomModel> {
       if (upsert) {
         const obj = await _model.findOne({ where: { id } });
 

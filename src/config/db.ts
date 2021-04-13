@@ -1,3 +1,4 @@
+import { FastifyInstance } from 'fastify';
 import _ from 'lodash';
 import { Op, Sequelize } from 'sequelize';
 import { IModelDict, setInstances } from '../services/db';
@@ -70,7 +71,7 @@ function addCustomMethods(models: IModelDict) {
   });
 }
 
-export function loadService(app: any, models: IModelDict) {
+export function service(app: FastifyInstance, models: IModelDict): void {
   setInstances(models, sequelize);
   addCustomMethods(models);
 }
@@ -82,5 +83,5 @@ export const getClient = () => sequelize;
 export default {
   init,
   getClient,
-  loadService
+  service
 }
